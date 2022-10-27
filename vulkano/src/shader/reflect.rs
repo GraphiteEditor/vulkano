@@ -221,6 +221,7 @@ fn inspect_entry_point(
         id: Id,
     ) -> Option<(&'a mut DescriptorVariable, Option<u32>)> {
         let id = chain.into_iter().try_fold(id, |id, func| func(spirv, id))?;
+        println!("id: {:#?}", global);
 
         if let Some(variable) = global.get(&id) {
             // Variable was accessed without an access chain, return with index 0.
@@ -228,11 +229,24 @@ fn inspect_entry_point(
             return Some((variable, Some(0)));
         }
 
-        let (id, indexes) = match *spirv.id(id).instruction() {
+        let (id, indexes) = match *dbg!(spirv.id(id).instruction()) {
             Instruction::AccessChain {
                 base, ref indexes, ..
             } => (base, indexes),
+            Instruction::InBoundsAccessChain {
+                base, ref indexes, ..
+            } => (base, indexes),
             _ => return None,
+        };
+        // TODO: check access chains recursively
+        let (id, indexes) = match *dbg!(spirv.id(id).instruction()) {
+            Instruction::AccessChain {
+                base, ref indexes, ..
+            } => (base, indexes),
+            Instruction::InBoundsAccessChain {
+                base, ref indexes, ..
+            } => (base, indexes),
+            _ => (id, indexes),
         };
 
         if let Some(variable) = global.get(&id) {
@@ -646,6 +660,7 @@ fn inspect_entry_point(
                     }
 
                     Instruction::Load { pointer, .. } => {
+                        println!("Load: {:?}", pointer);
                         instruction_chain(result, global, spirv, [], pointer);
                     }
 
@@ -952,19 +967,21 @@ fn push_constant_requirements(spirv: &Spirv, stage: ShaderStage) -> Option<PushC
                 ..
             } => {
                 let id_info = spirv.id(ty);
-                assert!(matches!(
-                    id_info.instruction(),
-                    Instruction::TypeStruct { .. }
-                ));
-                let start = offset_of_struct(spirv, ty);
-                let end =
-                    size_of_type(spirv, ty).expect("Found runtime-sized push constants") as u32;
+                match id_info.instruction() {
+                    Instruction::TypeStruct { .. } => {
+                        let start = offset_of_struct(spirv, ty);
+                        let end = size_of_type(spirv, ty)
+                            .expect("Found runtime-sized push constants")
+                            as u32;
 
-                Some(PushConstantRange {
-                    stages: stage.into(),
-                    offset: start,
-                    size: end - start,
-                })
+                        Some(PushConstantRange {
+                            stages: stage.into(),
+                            offset: start,
+                            size: end - start,
+                        })
+                    }
+                    _ => None,
+                }
             }
             _ => None,
         })

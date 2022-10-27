@@ -77,10 +77,12 @@ impl VulkanLibrary {
             }
 
             let loader = unsafe { DynamicLibraryLoader::new(get_path())? };
+            println!("bar");
 
             Ok(Box::new(loader))
         }
 
+        println!("loading");
         def_loader_impl().and_then(VulkanLibrary::with_loader)
     }
 

@@ -226,6 +226,7 @@ extern crate syn;
 
 use crate::codegen::ShaderKind;
 use ahash::HashMap;
+use proc_macro2::Span;
 use shaderc::{EnvVersion, SpirvVersion};
 use std::{
     borrow::Cow,
@@ -238,6 +239,7 @@ use std::{
 };
 use syn::{
     parse::{Parse, ParseStream, Result},
+    punctuated::Punctuated,
     Ident, ItemUse, LitBool, LitStr, Meta, MetaList, NestedMeta, Path as SynPath, TypeImplTrait,
 };
 
@@ -266,8 +268,28 @@ struct TypesMeta {
 impl Default for TypesMeta {
     #[inline]
     fn default() -> Self {
+        fn to_path(token_path: &[Ident]) -> SynPath {
+            let mut path = SynPath {
+                leading_colon: None,
+                segments: Punctuated::new(),
+            };
+            for ident in token_path {
+                path.segments.push(ident.clone().into());
+            }
+            path
+        }
+
         Self {
-            custom_derives: vec![],
+            custom_derives: vec![
+                to_path(&[
+                    Ident::new("bytemuck", Span::call_site()),
+                    Ident::new("Pod", Span::call_site()),
+                ]),
+                to_path(&[
+                    Ident::new("bytemuck", Span::call_site()),
+                    Ident::new("Zeroable", Span::call_site()),
+                ]),
+            ],
             clone: true,
             copy: true,
             partial_eq: false,

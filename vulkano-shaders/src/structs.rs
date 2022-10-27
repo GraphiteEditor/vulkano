@@ -22,6 +22,14 @@ pub(super) fn write_structs<'a>(
     types_meta: &'a TypesMeta,
     types_registry: &'a mut HashMap<String, RegisteredType>,
 ) -> TokenStream {
+    fn gen_id() -> u64 {
+        static mut ID: u64 = 0;
+        unsafe {
+            let id = ID;
+            ID += 1;
+            id
+        }
+    }
     spirv
         .iter_global()
         .filter_map(|instruction| match instruction {
@@ -40,12 +48,14 @@ pub(super) fn write_structs<'a>(
                 .id(struct_id)
                 .iter_name()
                 .find_map(|instruction| match instruction {
-                    Instruction::Name { name, .. } => Some(name.as_str()),
+                    Instruction::Name { name, .. } => Some(name.clone()),
                     _ => None,
                 })
-                .unwrap_or("__unnamed");
+                .unwrap_or(format!("__unnamed_struct_{}", gen_id()));
 
+            let struct_name = struct_name.as_str();
             // Register the type if needed
+            println!("Registering struct {:?}", struct_name);
             if !register_struct(types_registry, shader, &rust_members, struct_name) {
                 return None;
             }
